@@ -5,18 +5,40 @@ uses Classes, SysUtils, FileUtil, IniFiles
   {$ifdef MsWindows}, Windows{$endif}, iniparser;
 
 type
-    ConsoleColor = (
+    ConsoleColor =
+    {$ifdef MsWindows}
+    (
     cfBlack = 0, cfBlue = 1, cfGreen = 2, cfCyan = 3,
     cfRed = 4, cfMagenta = 5, cfYellow = 6, cfLightGrey = 7,
     cfDarkGrey = 8, cfLightBlue = 9, cfLightGreen = 10,
     cfLightCyan = 11, cfLightRed = 12, cfLightMagenta = 13,
-    cfLightYellow = 14, cfWhite = 15);
-    ConsoleBgColor = (
+    cfLightYellow = 14, cfWhite = 15, cfNone = 200
+    );
+    ConsoleBgColor =
+    (
     cbBlack = 10, cbBlue = 11, cbGreen = 12, cbCyan = 13,
     cbRed = 14, cbMagenta = 15, cbYellow = 16, cbLightGrey = 17,
     cbDarkGrey = 18, cbLightBlue = 19, cbLightGreen = 20,
     cbLightCyan = 21, cbLightRed = 22, cbLightMagenta = 23,
-    cbLightYellow = 24, cbWhite = 25);
+    cbLightYellow = 24, cbWhite = 25, cbNone = 200
+    );
+    {$else}
+    (
+    cfBlack = 30, cfBlue = 34, cfGreen = 32, cfCyan = 36,
+    cfRed = 31, cfMagenta = 35, cfYellow = 33, cfLightGrey = 37,
+    cfDarkGrey = 90, cfLightBlue = 94, cfLightGreen = 92,
+    cfLightCyan = 96, cfLightRed = 91, cfLightMagenta = 95,
+    cfLightYellow = 93, cfWhite = 97, cfNone = 200
+    );
+    ConsoleBgColor =
+    (
+    cbBlack = 40, cbBlue = 44, cbGreen = 42, cbCyan = 46,
+    cbRed = 41, cbMagenta = 45, cbYellow = 43, cbLightGrey = 47,
+    cbDarkGrey = 100, cbLightBlue = 104, cbLightGreen = 102,
+    cbLightCyan = 106, cbLightRed = 101, cbLightMagenta = 105,
+    cbLightYellow = 103, cbWhite = 107, cbNone = 200
+    );
+    {$endif}
     StringArray = array of String;
     StringCollector = array of StringArray;
 
@@ -57,10 +79,26 @@ type
       Raw: TIniString;
       Mass: array [0..12] of TIniString;
     end;
+    {$ifdef MsWindows}
+    TCLIOpts = WORD;
+    {$else}
+    TCLIOpts = record
+      TextColor: ConsoleColor;
+      BackgroundColor: ConsoleBgColor;
+    end;
+    {$endif}
 
     ///LangIDS//
 
-const LangIDS:array[0..11] of String = ('[English]', '[Italian]', '[French]',
+const
+{$ifndef MsWindows}
+ESC_CHAR = Char(27);
+AEC_START = ESC_CHAR + '[';
+CSI = AEC_START;
+AEC_RESET = ESC_CHAR + '[0m';
+{$endif}
+
+LangIDS:array[0..11] of String = ('[English]', '[Italian]', '[French]',
 '[German]', '[Spanish]', '[Czech]', '[Hungarian]', '[Polish]',
 '[Russian]', '[TRC]', '[Slovak]', '[Ukrainian]');
 
@@ -73,10 +111,6 @@ G3IniErrors:array[0..5] of String = (
   'Комірці перекладу бракує 1ї або більше мов'
   );
 var
-    (*PPPARSEEERR*)
-      AAddKKeys: array of TIniString;
-      AAddKVals: array of TIniTranslation;
-    (**)
    op, isFail: Byte;
    ParamS: String;
   cwd, err,
@@ -84,9 +118,11 @@ var
   IniFIn, IniFCIn: TIniFile;
   NumOk, NumTot, NumErr: Integer;
   KeyNs, Dirs, Errors, LangValues: TStrings;
-  CLIOpts, OrigCLIOpts: WORD;
+  CLIOpts, OrigCLIOpts: TCLIOpts;
+  {$ifdef MsWindows}
   CLI_SBI: TConsoleScreenBufferInfo;
   StdOut: HANDLE;
+  {$endif}
   IniFOut: TStrings;
 
   OutputLogFile, OutputTo: String;
@@ -101,7 +137,8 @@ var
   CLIOpts := (CLIOpts and $F0) or (Byte(Color) and $0F);
   SetConsoleTextAttribute(StdOut, CLIOpts);
   {$else}
-  if ConCanUseAEC then Write(CSI, Color, 'm');
+  CLIOpts.TextColor := Color;
+  Write( CSI, Byte(Color), 'm');
   {$endif}
   end;
 
@@ -111,7 +148,8 @@ begin
   CLIOpts := (CLIOpts and $0F) or Word((Byte(Color) shl 4) and $F0);
   SetConsoleTextAttribute(StdOut, CLIOpts);
   {$ELSE}
-  if ConCanUseAEC then Write(CSI, Color, 'm');
+  CLIOpts.BackgroundColor:=Color;
+  Write(CSI, Byte(Color), 'm');
   {$ENDIF}
 end;
 
@@ -122,73 +160,120 @@ begin
   CLIOpts := (CLIOpts and $0F) or Word((Byte(BgColor) shl 4) and $F0);
   SetConsoleTextAttribute(StdOut, CLIOpts);
   {$ELSE}
-  if ConCanUseAEC then Write(CSI, 0, ';', TextColor, ';', BgColor, 'm');
+  CLIOpts.TextColor := TextColor;
+  CLIOpts.BackgroundColor := BgColor;
+  Write(CSI, 0, ';', Byte(TextColor), ';', Byte(BgColor), 'm');
   {$ENDIF}
 end;
 
+procedure CLIStdColors();
+begin
+     {$ifdef MsWindows}
+     CLIOpts := OrigCLIOpts;
+     SetConsoleTextAttribute(StdOut, CLIOpts);
+     {$else}
+     CLIOpts.TextColor:=OrigCLIOpts.TextColor;
+     CLIOpts.BackgroundColor:=OrigCLIOpts.BackgroundColor;
+     Write( AEC_RESET );
+     if Byte(CLIOpts.TextColor) <> 200 then
+        TextColor(CLIOpts.TextColor);
+
+     if Byte(CLIOpts.BackgroundColor) <> 200 then
+        BackgroundColor(CLIOpts.BackgroundColor);
+
+     {$endif}
+end;
+
 procedure WriteCol(const st: String;Color: ConsoleColor);
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   TextColor(Color);
   Write(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  Write( AEC_RESET );
+  {$endif}
 end;
 
 procedure WriteLnCol(const st: String;Color: ConsoleColor);
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   TextColor(Color);
   WriteLn(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  Write( AEC_RESET );
+  {$endif}
 end;
 
-function ConsoleTitle(_ATitle: PUtf8Char): WINBOOL;
+function ConsoleTitle(_ATitle: PUtf8Char): {$ifdef MsWindows}WINBOOL{$else}Boolean{$endif};
 begin
+  {$ifdef MsWindows}
   Result := SetConsoleTitleW(PWideChar(WideString(Utf8String(_ATitle))));
+  {$else}
+  {$endif}
 end;
 
 procedure WriteCol(const st: String;Color: ConsoleBgColor); overload;
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   BackgroundColor(Color);
   Write(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  Write( AEC_RESET );
+  {$endif}
 end;
 
 procedure WriteLnCol(const st: String;Color: ConsoleBgColor); overload;
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   BackgroundColor(Color);
   WriteLn(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  CLIStdColors();
+  {$endif}
 end;
 
 procedure WriteCol(const st: String;Color: ConsoleColor; BGColor: ConsoleBgColor); overload;
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   CLIColors(Color, BGColor);
   Write(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  Write( AEC_RESET );
+  {$endif}
 end;
 
 procedure WriteLnCol(const st: String;Color: ConsoleColor; BGColor: ConsoleBgColor); overload;
-var CLIOptsBackup: WORD;
+var CLIOptsBackup: TCLIOpts;
 begin
   CLIOptsBackup := CLIOpts;
   CLIColors(Color, BGColor);
   WriteLn(PChar(st));
   CLIOpts := CLIOptsBackup;
+  {$ifdef MsWindows}
   SetConsoleTextAttribute(StdOut, CLIOpts);
+  {$else}
+  Write( AEC_RESET );
+  {$endif}
 end;
 
 procedure WriteCol(const st: String; BGColor: ConsoleBgColor; Color: ConsoleColor); overload;
@@ -201,11 +286,6 @@ begin
   WriteLnCol(st, Color, BgColor);
 end;
 
-procedure CLIStdColors();
-begin
-     CLIOpts := OrigCLIOpts;
-     SetConsoleTextAttribute(StdOut, CLIOpts);
-end;
   ///-------------------------------------------------//
   function InArray(AArray: Array of String; AKey:String): Boolean;
   var Ist: SizeInt;
@@ -255,6 +335,7 @@ end;
          end;
   end;
 
+{$ifdef MsWindows}
   function InArray(AArray: Array of Integer; AKey:Integer): Boolean; overload;
   var Ist: SizeInt;
   begin
@@ -266,6 +347,7 @@ end;
              Exit;
          end;
   end;
+{$endif}
 
   ///-------------------------------------------------//
   function G3StringToArr(const str:String; var AList: TStrings; errstr:string): Byte;
@@ -450,9 +532,7 @@ end;
         end;
     end;
   end;
-  function G3Lint(const AFile: String): Byte;
-  begin
-  end;
+
   ///-------------------------------------------------///
 procedure GoCheckOut();
 const
@@ -557,11 +637,6 @@ begin
       GoCheckOut();
     end;
     IniFIn.Free;
-  end;
-
-  procedure AddPair(AKey, AValue: String);
-  begin
-
   end;
 
   procedure GoCombine();
@@ -801,7 +876,7 @@ end;
   var Ic: Char;
   begin
        WriteLn();
-       WriteLn('Натисніть (ВВІД) для завершення...');
+       Write('Натисніть (ВВІД) для завершення...');
        Read(Ic);
   end;
 
@@ -965,6 +1040,10 @@ begin
   GetConsoleScreenBufferInfo(StdOut, CLI_SBI);
   OrigCLIOpts := CLI_SBI.wAttributes;
   CLIOpts := OrigCLIOpts;
+  {$else}
+  OrigCLIOpts.TextColor := cfNone;
+  OrigCLIOpts.BackgroundColor := cbNone;
+  CLIOpts := OrigCLIOpts;
   {$endif}
 
   ConsoleTitle('Euanosphere');
@@ -1074,7 +1153,7 @@ begin
 
   FindAllDirectories(Dirs, cwd, False);
   if (Dirs.Count < 1) then
-     op := 5;
+     op := 4;
 
   case op of
      1: GoCombine();
