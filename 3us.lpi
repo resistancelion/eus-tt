@@ -89,9 +89,6 @@
             </Debugging>
             <LinkSmart Value="True"/>
           </Linking>
-          <Other>
-            <CustomOptions Value="-Ayasm"/>
-          </Other>
         </CompilerOptions>
       </Item>
       <Item Name="R-Linux ARM">
