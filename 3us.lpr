@@ -1,50 +1,14 @@
 program Eus;
-//{$codepage UTF8}
 {$mode ObjFPC}{$H+}
-uses Classes, SysUtils, FileUtil, IniFiles
-  {$ifdef MsWindows}, Windows{$endif}, iniparser;
+
+uses
+    Classes, SysUtils, FileUtil, IniFiles,
+     Eus.Types
+  {$ifdef MsWindows}, Windows{$endif};
 
 type
-    ConsoleColor =
-    {$ifdef MsWindows}
-    (
-    cfBlack = 0, cfBlue = 1, cfGreen = 2, cfCyan = 3,
-    cfRed = 4, cfMagenta = 5, cfYellow = 6, cfLightGrey = 7,
-    cfDarkGrey = 8, cfLightBlue = 9, cfLightGreen = 10,
-    cfLightCyan = 11, cfLightRed = 12, cfLightMagenta = 13,
-    cfLightYellow = 14, cfWhite = 15, cfNone = 200
-    );
-    ConsoleBgColor =
-    (
-    cbBlack = 10, cbBlue = 11, cbGreen = 12, cbCyan = 13,
-    cbRed = 14, cbMagenta = 15, cbYellow = 16, cbLightGrey = 17,
-    cbDarkGrey = 18, cbLightBlue = 19, cbLightGreen = 20,
-    cbLightCyan = 21, cbLightRed = 22, cbLightMagenta = 23,
-    cbLightYellow = 24, cbWhite = 25, cbNone = 200
-    );
-    {$else}
-    (
-    cfBlack = 30, cfBlue = 34, cfGreen = 32, cfCyan = 36,
-    cfRed = 31, cfMagenta = 35, cfYellow = 33, cfLightGrey = 37,
-    cfDarkGrey = 90, cfLightBlue = 94, cfLightGreen = 92,
-    cfLightCyan = 96, cfLightRed = 91, cfLightMagenta = 95,
-    cfLightYellow = 93, cfWhite = 97, cfNone = 200
-    );
-    ConsoleBgColor =
-    (
-    cbBlack = 40, cbBlue = 44, cbGreen = 42, cbCyan = 46,
-    cbRed = 41, cbMagenta = 45, cbYellow = 43, cbLightGrey = 47,
-    cbDarkGrey = 100, cbLightBlue = 104, cbLightGreen = 102,
-    cbLightCyan = 106, cbLightRed = 101, cbLightMagenta = 105,
-    cbLightYellow = 103, cbWhite = 107, cbNone = 200
-    );
-    {$endif}
-    StringArray = array of String;
-    StringCollector = array of StringArray;
-
     //LangIDS//
-    TArrayOfString =  array of String;
-    TIniRowNames = array of String;
+    TIniRowNames = TStringArray;
     TIniSectionNames = TIniRowNames;
     TIniRowValue = Array[0..11] of String;
     TIniRowValues = Array of TIniRowValue;
@@ -79,14 +43,6 @@ type
       Raw: TIniString;
       Mass: array [0..12] of TIniString;
     end;
-    {$ifdef MsWindows}
-    TCLIOpts = WORD;
-    {$else}
-    TCLIOpts = record
-      TextColor: ConsoleColor;
-      BackgroundColor: ConsoleBgColor;
-    end;
-    {$endif}
 
     ///LangIDS//
 
@@ -335,7 +291,7 @@ end;
          end;
   end;
 
-{$ifdef MsWindows}
+{$if System.SizeInt<>System.Integer}
   function InArray(AArray: Array of Integer; AKey:Integer): Boolean; overload;
   var Ist: SizeInt;
   begin
@@ -411,7 +367,7 @@ end;
 
 
   end;
-function G3StringToArr2(const str:String; var AList: TArrayOfString; errstr:string): Byte;
+function G3StringToArr2(const str:String; var AList: TStringArray; errstr:string): Byte;
 var I, EndCCount, StrEnd: Integer;
     EndC: Boolean;
     resultstr: String;
@@ -884,7 +840,7 @@ end;
   begin
        WriteLn('Використання:');
        WriteLn(
-        ParamStr(0).Split( DirectorySeparator )[ ParamStr(0).CountChar( DirectorySeparator ) ],
+        PUtf8Char(UTF8String(ParamStr(0).Split( DirectorySeparator )[ ParamStr(0).CountChar( DirectorySeparator ) ])),
         ' [КОМАНДА] [ОПЦІЇ]'
         );
        WriteLn();
@@ -1152,7 +1108,7 @@ begin
   sec      := 'LocAdmin_Strings';
 
   FindAllDirectories(Dirs, cwd, False);
-  if (Dirs.Count < 1) then
+  if (Dirs.Count < 1) And (op <> 5) then
      op := 4;
 
   case op of
